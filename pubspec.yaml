@@ -23,6 +23,15 @@ dependencies:
   cupertino_icons: ^1.0.8
   # Cross-platform file picking (used for JSON import)
   file_picker: ^10.1.9
+  # Android/iOS notifications
+  flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4
+  flutter_timezone: ^4.1.0
+  # Export file sharing
+  path_provider: ^2.1.4
+  share_plus: ^10.0.2
+  # Google Fonts - includes comprehensive Unicode coverage
+  google_fonts: ^6.1.0
 
 dev_dependencies:
   flutter_test:

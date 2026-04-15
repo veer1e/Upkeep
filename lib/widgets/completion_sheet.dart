@@ -52,10 +52,20 @@ class _CompletionSheetState extends State<CompletionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF111827) : Colors.white;
+    final bgColor = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final textPrimary =
+        isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary;
+    final textSecondary =
+        isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary;
+    final border = isDark ? const Color(0xFF253041) : AppTheme.borderLight;
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
       padding: EdgeInsets.only(
         left: 24,
@@ -71,7 +81,7 @@ class _CompletionSheetState extends State<CompletionSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppTheme.borderMedium,
+              color: border,
               borderRadius: BorderRadius.circular(100),
             ),
           ),
@@ -91,19 +101,19 @@ class _CompletionSheetState extends State<CompletionSheet> {
                   children: [
                     Text(
                       widget.task.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Inter',
                         fontWeight: FontWeight.w700,
                         fontSize: 20,
-                        color: AppTheme.textPrimary,
+                        color: textPrimary,
                       ),
                     ),
-                    const Text(
+                    Text(
                       'When did you do this?',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 13,
-                        color: AppTheme.textTertiary,
+                        color: textSecondary,
                       ),
                     ),
                   ],
@@ -115,13 +125,15 @@ class _CompletionSheetState extends State<CompletionSheet> {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: AppTheme.background,
+                    color: isDark
+                        ? const Color(0xFF1F2937)
+                        : AppTheme.background,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.close_rounded,
                     size: 16,
-                    color: AppTheme.textSecondary,
+                    color: textSecondary,
                   ),
                 ),
               ),
@@ -154,8 +166,11 @@ class _CompletionSheetState extends State<CompletionSheet> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     decoration: BoxDecoration(
-                      color:
-                          isSelected ? AppTheme.primary : AppTheme.background,
+                      color: isSelected
+                          ? AppTheme.primary
+                          : (isDark
+                              ? const Color(0xFF1F2937)
+                              : AppTheme.background),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: isSelected
                           ? [
@@ -176,7 +191,9 @@ class _CompletionSheetState extends State<CompletionSheet> {
                           fontSize: 14,
                           color: isSelected
                               ? Colors.white
-                              : AppTheme.textSecondary,
+                              : (isDark
+                                  ? const Color(0xFFF9FAFB)
+                                  : AppTheme.textSecondary),
                         ),
                       ),
                     ),
@@ -191,29 +208,31 @@ class _CompletionSheetState extends State<CompletionSheet> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppTheme.background,
+                color: isDark
+                    ? const Color(0xFF1F2937)
+                    : AppTheme.background,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.borderMedium),
+                border: Border.all(color: border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Selected Date: $_formattedDate',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Inter',
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
-                      color: AppTheme.textPrimary,
+                      color: textPrimary,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '($_daysAgoLabel)',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 12,
-                      color: AppTheme.textTertiary,
+                      color: textSecondary,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -233,8 +252,11 @@ class _CompletionSheetState extends State<CompletionSheet> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.background,
-                        foregroundColor: AppTheme.textSecondary,
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -266,10 +288,15 @@ class _CompletionSheetState extends State<CompletionSheet> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: !_useCustomDate
                           ? AppTheme.primary
-                          : AppTheme.background,
+                          : (isDark
+                              ? const Color(0xFF1F2937)
+                              : AppTheme.background),
                       foregroundColor: !_useCustomDate
                           ? Colors.white
-                          : AppTheme.textSecondary,
+                          : textSecondary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: const Text('Preset'),
                   ),
@@ -287,10 +314,15 @@ class _CompletionSheetState extends State<CompletionSheet> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _useCustomDate
                           ? AppTheme.primary
-                          : AppTheme.background,
+                          : (isDark
+                              ? const Color(0xFF1F2937)
+                              : AppTheme.background),
                       foregroundColor: _useCustomDate
                           ? Colors.white
-                          : AppTheme.textSecondary,
+                          : textSecondary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: const Text('Custom Date'),
                   ),
@@ -410,7 +442,7 @@ class _CompletionSheetState extends State<CompletionSheet> {
 }
 
 /// Call this to show the completion sheet as a modal bottom sheet
-Future<void> showCompletionSheet(BuildContext context, Task task) {
+Future<bool?> showCompletionSheet(BuildContext context, Task task) {
   return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,

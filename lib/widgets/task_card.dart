@@ -22,31 +22,36 @@ class _StatusConfig {
   });
 }
 
-_StatusConfig _configForStatus(TaskStatus status) {
+_StatusConfig _configForStatus(TaskStatus status, bool isDark) {
   switch (status) {
     case TaskStatus.overdue:
-      return const _StatusConfig(
-        cardBg: AppTheme.overdueRedBg,
-        cardBorder: AppTheme.overdueRedBorder,
-        badgeBg: AppTheme.overdueRedBadge,
+      return _StatusConfig(
+        cardBg: isDark ? const Color(0xFF2C1517) : AppTheme.overdueRedBg,
+        cardBorder:
+            isDark ? const Color(0xFF5C262A) : AppTheme.overdueRedBorder,
+        badgeBg: isDark ? const Color(0xFF4D1F24) : AppTheme.overdueRedBadge,
         badgeText: AppTheme.overdueRed,
         doneBtn: AppTheme.overdueRed,
-        doneBtnShadow: Color(0xFFFCA5A5),
+        doneBtnShadow:
+            isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFCA5A5),
       );
     case TaskStatus.dueToday:
-      return const _StatusConfig(
-        cardBg: AppTheme.dueTodayOrangeBg,
-        cardBorder: AppTheme.dueTodayOrangeBorder,
-        badgeBg: AppTheme.dueTodayOrangeBadge,
+      return _StatusConfig(
+        cardBg: isDark ? const Color(0xFF2D1F12) : AppTheme.dueTodayOrangeBg,
+        cardBorder:
+            isDark ? const Color(0xFF5A3A1F) : AppTheme.dueTodayOrangeBorder,
+        badgeBg:
+            isDark ? const Color(0xFF4A3118) : AppTheme.dueTodayOrangeBadge,
         badgeText: AppTheme.dueTodayOrange,
         doneBtn: AppTheme.dueTodayOrange,
-        doneBtnShadow: Color(0xFFFDBA74),
+        doneBtnShadow:
+            isDark ? const Color(0xFF7C2D12) : const Color(0xFFFDBA74),
       );
     case TaskStatus.upcoming:
-      return const _StatusConfig(
-        cardBg: Colors.white,
-        cardBorder: AppTheme.borderLight,
-        badgeBg: AppTheme.upcomingBlueBg,
+      return _StatusConfig(
+        cardBg: isDark ? const Color(0xFF0B1220) : Colors.white,
+        cardBorder: isDark ? const Color(0xFF253041) : AppTheme.borderLight,
+        badgeBg: isDark ? const Color(0xFF1E3A5F) : AppTheme.upcomingBlueBg,
         badgeText: AppTheme.upcomingBlue,
         doneBtn: AppTheme.primary,
         doneBtnShadow: AppTheme.primaryShadow,
@@ -92,10 +97,13 @@ class _TaskCardState extends State<TaskCard>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final status = getTaskStatus(widget.task.nextDue);
     final days = getDaysUntilDue(widget.task.nextDue);
-    final cfg = _configForStatus(status);
+    final cfg = _configForStatus(status, isDark);
     final label = statusLabel(status, days);
+    final textPrimary = isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary;
+    final textMuted = isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary;
 
     return Container(
       decoration: BoxDecoration(
@@ -104,8 +112,8 @@ class _TaskCardState extends State<TaskCard>
         border: Border.all(color: cfg.cardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: isDark ? 4 : 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -115,93 +123,65 @@ class _TaskCardState extends State<TaskCard>
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Emoji icon
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                widget.task.emoji,
-                style: const TextStyle(fontSize: 26),
-              ),
+              child:
+                  Text(widget.task.emoji, style: const TextStyle(fontSize: 26)),
             ),
             const SizedBox(width: 12),
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title row
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Text(
                           widget.task.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Inter',
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
-                            color: AppTheme.textPrimary,
+                            color: textPrimary,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cfg.badgeBg,
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 11,
-                            color: cfg.badgeText,
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: cfg.badgeBg,
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: cfg.badgeText,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  // Last done row
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.access_time_rounded,
-                        size: 12,
-                        color: AppTheme.textTertiary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Last: ${formatLastDone(widget.task.lastDone)}',
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          color: AppTheme.textTertiary,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Text(
-                        '·',
-                        style: TextStyle(color: AppTheme.borderMedium),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Every ${widget.task.intervalDays}d',
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          color: AppTheme.textTertiary,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'Last: ${formatLastDone(widget.task.lastDone)} · Every ${widget.task.intervalDays}d',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: textMuted,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  // Action buttons
                   Row(
                     children: [
                       Expanded(
@@ -277,7 +257,7 @@ class _DoneButtonState extends State<_DoneButton>
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: widget.cfg.doneBtnShadow.withOpacity(0.5),
+                color: widget.cfg.doneBtnShadow.withValues(alpha: 0.5),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
@@ -336,6 +316,7 @@ class _DetailsButtonState extends State<_DetailsButton>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTapDown: (_) => _ctrl.reverse(),
       onTapUp: (_) {
@@ -348,11 +329,13 @@ class _DetailsButtonState extends State<_DetailsButton>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF111827) : Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.borderMedium),
+            border: Border.all(
+              color: isDark ? const Color(0xFF374151) : AppTheme.borderMedium,
+            ),
           ),
-          child: const Row(
+          child: Row(
             children: [
               Text(
                 'Details',
@@ -360,14 +343,16 @@ class _DetailsButtonState extends State<_DetailsButton>
                   fontFamily: 'Inter',
                   fontWeight: FontWeight.w500,
                   fontSize: 12,
-                  color: AppTheme.textSecondary,
+                  color:
+                      isDark ? const Color(0xFFD1D5DB) : AppTheme.textSecondary,
                 ),
               ),
-              SizedBox(width: 2),
+              const SizedBox(width: 2),
               Icon(
                 Icons.chevron_right_rounded,
                 size: 14,
-                color: AppTheme.textSecondary,
+                color:
+                    isDark ? const Color(0xFFD1D5DB) : AppTheme.textSecondary,
               ),
             ],
           ),

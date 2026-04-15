@@ -296,10 +296,10 @@ class _TaskPreviewRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF111827) : Colors.white,
+          color: isDark ? const Color(0xFF0B1220) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isDark ? const Color(0xFF1F2937) : AppTheme.borderLight,
+            color: isDark ? const Color(0xFF253041) : AppTheme.borderLight,
           ),
         ),
         child: Row(

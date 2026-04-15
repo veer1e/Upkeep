@@ -7,6 +7,7 @@ import 'screens/tasks_screen.dart';
 import 'screens/task_details_screen.dart';
 import 'screens/add_task_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/app_notification_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -24,6 +25,8 @@ void main() async {
     statusBarIconBrightness: Brightness.dark,
     statusBarBrightness: Brightness.light,
   ));
+
+  await AppNotificationService.instance.initialize();
 
   runApp(
     ChangeNotifierProvider(

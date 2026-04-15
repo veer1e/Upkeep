@@ -19,6 +19,10 @@ class TaskDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF0B1220) : Colors.white;
+    final border = isDark ? const Color(0xFF253041) : AppTheme.borderLight;
+    final textPrimary = isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary;
     final task = provider.tasks.cast<Task?>().firstWhere(
           (t) => t?.id == taskId,
           orElse: () => null,
@@ -55,7 +59,7 @@ class TaskDetailsScreen extends StatelessWidget {
       children: [
         // Header card
         Container(
-          color: Colors.white,
+          color: surface,
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           child: SafeArea(
             bottom: false,
@@ -71,13 +75,15 @@ class TaskDetailsScreen extends StatelessWidget {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: AppTheme.background,
+                          color: isDark
+                              ? const Color(0xFF1F2937)
+                              : AppTheme.background,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.arrow_back_rounded,
                           size: 20,
-                          color: AppTheme.textPrimary,
+                          color: textPrimary,
                         ),
                       ),
                     ),
@@ -109,9 +115,11 @@ class TaskDetailsScreen extends StatelessWidget {
                       width: 64,
                       height: 64,
                       decoration: BoxDecoration(
-                        color: AppTheme.background,
+                        color: isDark
+                            ? const Color(0xFF1F2937)
+                            : AppTheme.background,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppTheme.borderLight),
+                        border: Border.all(color: border),
                       ),
                       child: Center(
                         child: Text(
@@ -126,11 +134,11 @@ class TaskDetailsScreen extends StatelessWidget {
                       children: [
                         Text(
                           task.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Inter',
                             fontWeight: FontWeight.w800,
                             fontSize: 22,
-                            color: AppTheme.textPrimary,
+                            color: textPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -163,9 +171,13 @@ class TaskDetailsScreen extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       HapticFeedback.mediumImpact();
-                      showCompletionSheet(context, task);
+                      final completed =
+                          await showCompletionSheet(context, task);
+                      if (completed == true && context.mounted) {
+                        onBack();
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primary,
@@ -179,7 +191,8 @@ class TaskDetailsScreen extends StatelessWidget {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.check_rounded, color: Colors.white, size: 20),
+                        Icon(Icons.check_rounded,
+                            color: Colors.white, size: 20),
                         SizedBox(width: 8),
                         Text(
                           'Mark as Done',
@@ -213,6 +226,7 @@ class TaskDetailsScreen extends StatelessWidget {
                       label: 'Last done',
                       value: formatLastDone(task.lastDone),
                       sub: formatDate(task.lastDone),
+                      isDark: isDark,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -226,6 +240,7 @@ class TaskDetailsScreen extends StatelessWidget {
                           : days < 0
                               ? '${days.abs()}d ago'
                               : 'In $days days',
+                      isDark: isDark,
                     ),
                   ),
                 ],
@@ -339,12 +354,14 @@ class _StatCard extends StatelessWidget {
   final String label;
   final String value;
   final String sub;
+  final bool isDark;
 
   const _StatCard({
     required this.icon,
     required this.label,
     required this.value,
     required this.sub,
+    required this.isDark,
   });
 
   @override
@@ -352,23 +369,29 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF111827) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderLight),
+        border: Border.all(
+          color: isDark ? const Color(0xFF253041) : AppTheme.borderLight,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: AppTheme.textTertiary),
+              Icon(icon,
+                  size: 14,
+                  color:
+                      isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary),
               const SizedBox(width: 4),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 11,
-                  color: AppTheme.textTertiary,
+                  color:
+                      isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary,
                 ),
               ),
             ],
@@ -376,20 +399,20 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Inter',
               fontWeight: FontWeight.w700,
               fontSize: 14,
-              color: AppTheme.textPrimary,
+              color: isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             sub,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Inter',
               fontSize: 11,
-              color: AppTheme.textTertiary,
+              color: isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary,
             ),
           ),
         ],
@@ -405,12 +428,15 @@ class _MetaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF111827) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderLight),
+        border: Border.all(
+          color: isDark ? const Color(0xFF253041) : AppTheme.borderLight,
+        ),
       ),
       child: Column(
         children: [
@@ -419,23 +445,29 @@ class _MetaCard extends StatelessWidget {
             label: 'Schedule type',
             value: task.type.label,
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: AppTheme.borderLight),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Divider(
+              height: 1,
+              color: isDark ? const Color(0xFF253041) : AppTheme.borderLight,
+            ),
           ),
           _MetaRow(
             icon: Icons.access_time_rounded,
             label: 'Interval',
             value: 'Every ${task.intervalDays} days',
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: AppTheme.borderLight),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Divider(
+              height: 1,
+              color: isDark ? const Color(0xFF253041) : AppTheme.borderLight,
+            ),
           ),
           _MetaRow(
             icon: Icons.label_outline_rounded,
             label: 'Category',
-            value: '${task.category.emoji} ${task.category.label}',
+            value: '${task.categoryEmoji} ${task.categoryLabel}',
           ),
         ],
       ),
@@ -456,26 +488,29 @@ class _MetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
-        Icon(icon, size: 16, color: AppTheme.textSecondary),
+        Icon(icon,
+            size: 16,
+            color: isDark ? const Color(0xFFD1D5DB) : AppTheme.textSecondary),
         const SizedBox(width: 8),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Inter',
             fontSize: 14,
-            color: AppTheme.textSecondary,
+            color: isDark ? const Color(0xFFD1D5DB) : AppTheme.textSecondary,
           ),
         ),
         const Spacer(),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Inter',
             fontWeight: FontWeight.w600,
             fontSize: 14,
-            color: AppTheme.textPrimary,
+            color: isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary,
           ),
         ),
       ],
@@ -490,42 +525,48 @@ class _HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final visible = history.take(10).toList();
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF111827) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderLight),
+        border: Border.all(
+          color: isDark ? const Color(0xFF253041) : AppTheme.borderLight,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text(
+              Text(
                 'Completion History',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
-                  color: AppTheme.textPrimary,
+                  color:
+                      isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary,
                 ),
               ),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppTheme.background,
+                  color: isDark ? const Color(0xFF1F2937) : AppTheme.background,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Text(
                   '${history.length} times',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 11,
-                    color: AppTheme.textTertiary,
+                    color: isDark
+                        ? const Color(0xFF9CA3AF)
+                        : AppTheme.textTertiary,
                   ),
                 ),
               ),
@@ -550,16 +591,21 @@ class _HistoryCard extends StatelessWidget {
                           width: 16,
                           height: 16,
                           decoration: BoxDecoration(
-                            color: isFirst ? AppTheme.primary : AppTheme.borderMedium,
+                            color: isFirst
+                                ? AppTheme.primary
+                                : AppTheme.borderMedium,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: Colors.white,
+                              color: isDark
+                                  ? const Color(0xFF111827)
+                                  : Colors.white,
                               width: 2,
                             ),
                             boxShadow: isFirst
                                 ? [
                                     BoxShadow(
-                                      color: AppTheme.primaryShadow.withOpacity(0.4),
+                                      color: AppTheme.primaryShadow
+                                          .withOpacity(0.4),
                                       blurRadius: 4,
                                     ),
                                   ]
@@ -570,7 +616,9 @@ class _HistoryCard extends StatelessWidget {
                           Expanded(
                             child: Container(
                               width: 1,
-                              color: AppTheme.borderLight,
+                              color: isDark
+                                  ? const Color(0xFF253041)
+                                  : AppTheme.borderLight,
                               margin: const EdgeInsets.symmetric(vertical: 2),
                             ),
                           ),
@@ -586,11 +634,16 @@ class _HistoryCard extends StatelessWidget {
                           formatDate(date),
                           style: TextStyle(
                             fontFamily: 'Inter',
-                            fontWeight: isFirst ? FontWeight.w700 : FontWeight.w400,
+                            fontWeight:
+                                isFirst ? FontWeight.w700 : FontWeight.w400,
                             fontSize: 14,
                             color: isFirst
-                                ? AppTheme.textPrimary
-                                : AppTheme.textSecondary,
+                                ? (isDark
+                                    ? const Color(0xFFF9FAFB)
+                                    : AppTheme.textPrimary)
+                                : (isDark
+                                    ? const Color(0xFFD1D5DB)
+                                    : AppTheme.textSecondary),
                           ),
                         ),
                         if (isFirst) ...[

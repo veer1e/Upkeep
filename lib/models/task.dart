@@ -87,6 +87,30 @@ extension TaskTypeExt on TaskType {
   }
 }
 
+class CustomCategory {
+  final String id;
+  final String label;
+  final String emoji;
+
+  const CustomCategory({
+    required this.id,
+    required this.label,
+    required this.emoji,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'emoji': emoji,
+      };
+
+  factory CustomCategory.fromJson(Map<String, dynamic> json) => CustomCategory(
+        id: json['id'] as String,
+        label: json['label'] as String,
+        emoji: json['emoji'] as String,
+      );
+}
+
 class Task {
   final String id;
   final String name;
@@ -99,6 +123,8 @@ class Task {
   final List<String> history; // YYYY-MM-DD[]
   final String? patternInsight;
   final String? conditionalTrigger;
+  final String? customCategoryLabel;
+  final String? customCategoryEmoji;
 
   const Task({
     required this.id,
@@ -112,6 +138,8 @@ class Task {
     required this.history,
     this.patternInsight,
     this.conditionalTrigger,
+    this.customCategoryLabel,
+    this.customCategoryEmoji,
   });
 
   Task copyWith({
@@ -126,6 +154,8 @@ class Task {
     List<String>? history,
     String? patternInsight,
     String? conditionalTrigger,
+    String? customCategoryLabel,
+    String? customCategoryEmoji,
   }) {
     return Task(
       id: id ?? this.id,
@@ -139,8 +169,13 @@ class Task {
       history: history ?? this.history,
       patternInsight: patternInsight ?? this.patternInsight,
       conditionalTrigger: conditionalTrigger ?? this.conditionalTrigger,
+      customCategoryLabel: customCategoryLabel ?? this.customCategoryLabel,
+      customCategoryEmoji: customCategoryEmoji ?? this.customCategoryEmoji,
     );
   }
+
+  String get categoryLabel => customCategoryLabel ?? category.label;
+  String get categoryEmoji => customCategoryEmoji ?? category.emoji;
 
   Map<String, dynamic> toJson() {
     return {
@@ -155,6 +190,8 @@ class Task {
       'history': history,
       'patternInsight': patternInsight,
       'conditionalTrigger': conditionalTrigger,
+      'customCategoryLabel': customCategoryLabel,
+      'customCategoryEmoji': customCategoryEmoji,
     };
   }
 
@@ -171,6 +208,8 @@ class Task {
       history: List<String>.from(json['history'] as List),
       patternInsight: json['patternInsight'] as String?,
       conditionalTrigger: json['conditionalTrigger'] as String?,
+      customCategoryLabel: json['customCategoryLabel'] as String?,
+      customCategoryEmoji: json['customCategoryEmoji'] as String?,
     );
   }
 
@@ -232,8 +271,18 @@ String formatLastDone(String lastDone) {
 String formatDate(String dateStr) {
   final date = _parseDate(dateStr);
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${months[date.month - 1]} ${date.day}, ${date.year}';
 }
@@ -279,7 +328,13 @@ final List<Task> initialTasks = [
     intervalDays: 14,
     lastDone: '2026-03-12',
     nextDue: '2026-03-30',
-    history: ['2026-01-15', '2026-01-29', '2026-02-12', '2026-02-26', '2026-03-12'],
+    history: [
+      '2026-01-15',
+      '2026-01-29',
+      '2026-02-12',
+      '2026-02-26',
+      '2026-03-12'
+    ],
     patternInsight: '~14 days interval',
   ),
   Task(

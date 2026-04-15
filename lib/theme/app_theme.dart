@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Brand colors — mirrors the React Tailwind palette
@@ -35,7 +36,7 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
-      fontFamily: 'Inter',
+      fontFamily: GoogleFonts.inter().fontFamily,
       colorScheme: ColorScheme.fromSeed(
         seedColor: primary,
         brightness: Brightness.light,
@@ -91,54 +92,47 @@ class AppTheme {
             borderRadius: BorderRadius.circular(16),
           ),
           padding: const EdgeInsets.symmetric(vertical: 16),
-          textStyle: const TextStyle(
-            fontFamily: 'Inter',
+          textStyle: GoogleFonts.inter(
             fontWeight: FontWeight.w700,
             fontSize: 16,
+            color: Colors.white,
           ),
           elevation: 4,
           shadowColor: primaryShadow,
         ),
       ),
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
-          fontFamily: 'Inter',
+      textTheme: TextTheme(
+        displayLarge: GoogleFonts.inter(
           fontWeight: FontWeight.w800,
           fontSize: 28,
           color: textPrimary,
         ),
-        headlineMedium: TextStyle(
-          fontFamily: 'Inter',
+        headlineMedium: GoogleFonts.inter(
           fontWeight: FontWeight.w800,
           fontSize: 22,
           color: textPrimary,
         ),
-        headlineSmall: TextStyle(
-          fontFamily: 'Inter',
+        headlineSmall: GoogleFonts.inter(
           fontWeight: FontWeight.w700,
           fontSize: 18,
           color: textPrimary,
         ),
-        titleMedium: TextStyle(
-          fontFamily: 'Inter',
+        titleMedium: GoogleFonts.inter(
           fontWeight: FontWeight.w700,
           fontSize: 16,
           color: textPrimary,
         ),
-        bodyMedium: TextStyle(
-          fontFamily: 'Inter',
+        bodyMedium: GoogleFonts.inter(
           fontWeight: FontWeight.w400,
           fontSize: 14,
           color: textSecondary,
         ),
-        bodySmall: TextStyle(
-          fontFamily: 'Inter',
+        bodySmall: GoogleFonts.inter(
           fontWeight: FontWeight.w400,
           fontSize: 12,
           color: textTertiary,
         ),
-        labelSmall: TextStyle(
-          fontFamily: 'Inter',
+        labelSmall: GoogleFonts.inter(
           fontWeight: FontWeight.w700,
           fontSize: 11,
           letterSpacing: 0.8,
@@ -151,7 +145,7 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
-      fontFamily: 'Inter',
+      fontFamily: GoogleFonts.inter().fontFamily,
       colorScheme: ColorScheme.fromSeed(
         seedColor: primary,
         brightness: Brightness.dark,

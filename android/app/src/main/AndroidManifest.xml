@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.life_maintenance">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Internet permission if you later add sync/backup -->
     <!-- <uses-permission android:name="android.permission.INTERNET"/> -->
@@ -18,7 +17,6 @@
         android:label="Life Maintenance"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="true"
         android:theme="@style/LaunchTheme"
         android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"

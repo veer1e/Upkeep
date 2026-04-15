@@ -6,12 +6,40 @@ import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
 
 const _emojis = [
-  '✂️', '🛏️', '🔧', '🧹', '🌱', '🍳',
-  '💊', '🏃', '📚', '🐕', '🚿', '🧴',
-  '🛁', '🚙', '🏋️', '🧽',
+  '✂️',
+  '🛏️',
+  '🔧',
+  '🧹',
+  '🌱',
+  '🍳',
+  '💊',
+  '🏃',
+  '📚',
+  '🐕',
+  '🚿',
+  '🧴',
+  '🛁',
+  '🚙',
+  '🏋️',
+  '🧽',
 ];
 
 const _intervalPresets = [3, 7, 14, 21, 28, 30, 60, 90, 180, 365];
+const _stepLabels = ['Task', 'Schedule', 'Finish'];
+const _categoryEmojiChoices = [
+  '🏷️',
+  '🧠',
+  '💼',
+  '🧾',
+  '🎓',
+  '🛒',
+  '🍽️',
+  '🎯',
+  '📦',
+  '🎨',
+  '🧳',
+  '🧑‍💻',
+];
 
 const _lastDoneOptions = [
   (label: 'Today', value: 0),
@@ -22,7 +50,17 @@ const _lastDoneOptions = [
   (label: '1 month ago', value: 30),
 ];
 
-const _stepLabels = ['Task', 'Schedule', 'Finish'];
+const _templates = [
+  (emoji: '✂️', name: 'Haircut', category: TaskCategory.personal, interval: 28),
+  (
+    emoji: '🛏️',
+    name: 'Wash Bedsheets',
+    category: TaskCategory.home,
+    interval: 14
+  ),
+  (emoji: '🔧', name: 'Oil Change', category: TaskCategory.car, interval: 90),
+  (emoji: '🌱', name: 'Water Plants', category: TaskCategory.home, interval: 3),
+];
 
 class AddTaskScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -42,6 +80,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   TaskType _taskType = TaskType.fixed;
   int _intervalDays = 14;
   int _lastDoneOffset = 0;
+  bool _isSubmitting = false;
+  CustomCategory? _selectedCustomCategory;
 
   final _nameController = TextEditingController();
   final _nameFocus = FocusNode();
@@ -49,9 +89,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _nameFocus.requestFocus();
-    });
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _nameFocus.requestFocus());
   }
 
   @override
@@ -61,8 +100,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     super.dispose();
   }
 
-  bool get _canProceed => _step == 1 ? _name.trim().isNotEmpty : true;
-
   String get _previewDate {
     final d = DateTime.now().subtract(Duration(days: _lastDoneOffset));
     final lastStr =
@@ -70,31 +107,56 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     return addDaysToDate(lastStr, _intervalDays);
   }
 
-  void _handleNext() {
-    if (_step < 3) {
-      HapticFeedback.selectionClick();
-      setState(() => _step++);
-    }
+  bool _isDuplicateName(List<Task> tasks) {
+    final normalized = _name.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    return tasks.any((t) => t.name.trim().toLowerCase() == normalized);
   }
 
-  void _handleBack() {
+  void _applyTemplate(
+      ({
+        String emoji,
+        String name,
+        TaskCategory category,
+        int interval,
+      }) template) {
+    _nameController.text = template.name;
+    setState(() {
+      _emoji = template.emoji;
+      _name = template.name;
+      _category = template.category;
+      _selectedCustomCategory = null;
+      _intervalDays = template.interval;
+      _taskType = TaskType.fixed;
+    });
+  }
+
+  void _goNext() {
+    if (_step < 3) setState(() => _step += 1);
+  }
+
+  void _goBack() {
     if (_step > 1) {
-      HapticFeedback.selectionClick();
-      setState(() => _step--);
+      setState(() => _step -= 1);
     } else {
       widget.onBack();
     }
   }
 
-  Future<void> _handleSubmit() async {
-    HapticFeedback.mediumImpact();
+  Future<void> _submit({
+    required AppProvider provider,
+    required bool addAnother,
+  }) async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
     final d = DateTime.now().subtract(Duration(days: _lastDoneOffset));
     final lastDoneStr =
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final nextDue = addDaysToDate(lastDoneStr, _intervalDays);
 
-    final newTask = Task(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+    final task = Task(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: _name.trim(),
       emoji: _emoji,
       category: _category,
@@ -103,121 +165,218 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       lastDone: lastDoneStr,
       nextDue: nextDue,
       history: [lastDoneStr],
-      patternInsight: _taskType == TaskType.fixed
-          ? 'Every $_intervalDays days'
-          : _taskType == TaskType.smart
-              ? 'Learning your pattern…'
-              : null,
+      customCategoryLabel: _selectedCustomCategory?.label,
+      customCategoryEmoji: _selectedCustomCategory?.emoji,
+      patternInsight:
+          _taskType == TaskType.fixed ? 'Every $_intervalDays days' : null,
     );
 
-    await context.read<AppProvider>().addTask(newTask);
+    try {
+      await provider.addTask(task);
+      if (!mounted) return;
 
-    if (mounted) {
+      if (addAnother) {
+        _nameController.clear();
+        setState(() {
+          _step = 1;
+          _name = '';
+          _emoji = '✂️';
+          _category = TaskCategory.personal;
+          _taskType = TaskType.fixed;
+          _intervalDays = 14;
+          _lastDoneOffset = 0;
+          _selectedCustomCategory = null;
+          _isSubmitting = false;
+        });
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _nameFocus.requestFocus());
+        return;
+      }
+
+      widget.onDone();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '$_emoji "$_name" added!',
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          backgroundColor: AppTheme.primary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+        const SnackBar(
+          content: Text('Could not add task. Please try again.'),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
         ),
       );
-      widget.onDone();
     }
+  }
+
+  Future<void> _createCustomCategory(AppProvider provider) async {
+    final nameController = TextEditingController();
+    String selectedEmoji = '🏷️';
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('New Category'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(hintText: 'Category name'),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _categoryEmojiChoices.map((emoji) {
+                  final selected = selectedEmoji == emoji;
+                  return GestureDetector(
+                    onTap: () => setDialogState(() => selectedEmoji = emoji),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppTheme.primaryLight
+                            : Colors.transparent,
+                        border: Border.all(
+                          color: selected
+                              ? AppTheme.primary
+                              : AppTheme.borderMedium,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(emoji),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (result != true) return;
+
+    final label = nameController.text.trim();
+    if (label.isEmpty) return;
+    await provider.addCustomCategory(label: label, emoji: selectedEmoji);
+    if (!mounted) return;
+    final added = provider.customCategories.firstWhere(
+      (c) => c.label.toLowerCase() == label.toLowerCase(),
+      orElse: () => provider.customCategories.last,
+    );
+    setState(() {
+      _selectedCustomCategory = added;
+      _category = TaskCategory.personal;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final tasks = provider.tasks;
+    final duplicateName = _isDuplicateName(tasks);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final panel = isDark ? const Color(0xFF111827) : AppTheme.background;
+    final text = isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary;
+    final muted = isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary;
+    final canContinue =
+        _step == 1 ? _name.trim().isNotEmpty && !duplicateName : true;
+
     return Column(
       children: [
-        // Header
         Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          color: surface,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
           child: SafeArea(
             bottom: false,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back + title
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: _handleBack,
+                      onTap: _goBack,
                       child: Container(
                         width: 36,
                         height: 36,
-                        decoration: BoxDecoration(
-                          color: AppTheme.background,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_rounded,
-                          size: 20,
-                          color: AppTheme.textPrimary,
-                        ),
+                        decoration:
+                            BoxDecoration(color: panel, shape: BoxShape.circle),
+                        child: Icon(Icons.arrow_back_rounded,
+                            color: text, size: 20),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Text(
-                      'New Task',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        color: AppTheme.textPrimary,
+                    Expanded(
+                      child: Text(
+                        'New Task',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                          color: text,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-
-                // Step progress
-                _StepProgress(step: _step, labels: _stepLabels),
+                const SizedBox(height: 10),
+                _StepProgress(step: _step, labels: _stepLabels, isDark: isDark),
               ],
             ),
           ),
         ),
-
-        // Content
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: _step == 1
                   ? _Step1(
                       key: const ValueKey(1),
+                      isDark: isDark,
                       emoji: _emoji,
-                      name: _name,
+                      category: _category,
+                      selectedCustomCategory: _selectedCustomCategory,
+                      customCategories: provider.customCategories,
+                      duplicateName: duplicateName,
                       nameController: _nameController,
                       nameFocus: _nameFocus,
-                      category: _category,
                       onEmojiChanged: (e) => setState(() => _emoji = e),
-                      onNameChanged: (n) => setState(() => _name = n),
-                      onCategoryChanged: (c) => setState(() => _category = c),
+                      onNameChanged: (v) => setState(() => _name = v),
+                      onCategoryChanged: (c) => setState(() {
+                        _category = c;
+                        _selectedCustomCategory = null;
+                      }),
+                      onCustomCategoryChanged: (c) =>
+                          setState(() => _selectedCustomCategory = c),
+                      onAddCustomCategory: () =>
+                          _createCustomCategory(provider),
+                      onTemplateTap: _applyTemplate,
                     )
                   : _step == 2
                       ? _Step2(
                           key: const ValueKey(2),
+                          isDark: isDark,
                           taskType: _taskType,
                           onTypeChanged: (t) => setState(() => _taskType = t),
                         )
                       : _Step3(
                           key: const ValueKey(3),
+                          isDark: isDark,
                           emoji: _emoji,
                           intervalDays: _intervalDays,
                           lastDoneOffset: _lastDoneOffset,
                           previewDate: _previewDate,
+                          reminderHour: provider.notificationHour,
+                          reminderMinute: provider.notificationMinute,
                           onIntervalChanged: (v) =>
                               setState(() => _intervalDays = v),
                           onLastDoneChanged: (v) =>
@@ -226,665 +385,620 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             ),
           ),
         ),
-
-        // Footer CTA
         Container(
-          color: Colors.white,
+          color: surface,
           padding: EdgeInsets.fromLTRB(
-            20,
-            16,
-            20,
-            MediaQuery.of(context).padding.bottom + 16,
-          ),
-          child: _step < 3
-              ? SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _canProceed ? _handleNext : null,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Continue'),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward_rounded, size: 18),
-                      ],
-                    ),
-                  ),
-                )
-              : SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _handleSubmit,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_rounded, size: 20),
-                        SizedBox(width: 8),
-                        Text('Add Task'),
-                      ],
-                    ),
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Step Progress ─────────────────────────────────────────────────────────────
-
-class _StepProgress extends StatelessWidget {
-  final int step;
-  final List<String> labels;
-
-  const _StepProgress({required this.step, required this.labels});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(labels.length, (i) {
-        final isActive = i + 1 == step;
-        final isDone = i + 1 < step;
-        final isLast = i == labels.length - 1;
-
-        return Expanded(
-          child: Row(
+              20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
+          child: Column(
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: isDone || isActive ? AppTheme.primary : AppTheme.borderMedium,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: isDone
-                      ? const Icon(Icons.check_rounded,
-                          size: 14, color: Colors.white)
-                      : Text(
-                          '${i + 1}',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                            color: isActive ? Colors.white : AppTheme.textTertiary,
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                labels[i],
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                  color: isActive ? AppTheme.primary : AppTheme.textTertiary,
-                ),
-              ),
-              if (!isLast) ...[
-                const SizedBox(width: 6),
-                Expanded(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    height: 2,
-                    decoration: BoxDecoration(
-                      color: isDone ? AppTheme.primary : AppTheme.borderMedium,
-                      borderRadius: BorderRadius.circular(2),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _step < 3
+                      ? (canContinue ? _goNext : null)
+                      : (_isSubmitting
+                          ? null
+                          : () =>
+                              _submit(provider: provider, addAnother: false)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 4,
+                    shadowColor: AppTheme.primaryShadow.withOpacity(0.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: _step < 3
+                      ? const Text('Continue')
+                      : _isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Text('Add Task'),
+                ),
+              ),
+              if (_step == 3) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => _submit(provider: provider, addAnother: true),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: isDark
+                          ? const Color(0xFFF9FAFB)
+                          : AppTheme.textPrimary,
+                      side: BorderSide(
+                        color: isDark
+                            ? const Color(0xFF374151)
+                            : AppTheme.borderMedium,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text('Save and Add Another'),
                   ),
                 ),
               ],
             ],
           ),
-        );
-      }),
-    );
-  }
-}
-
-// ─── Step 1: Task name, emoji, category ────────────────────────────────────────
-
-class _Step1 extends StatelessWidget {
-  final String emoji;
-  final String name;
-  final TextEditingController nameController;
-  final FocusNode nameFocus;
-  final TaskCategory category;
-  final void Function(String) onEmojiChanged;
-  final void Function(String) onNameChanged;
-  final void Function(TaskCategory) onCategoryChanged;
-
-  const _Step1({
-    super.key,
-    required this.emoji,
-    required this.name,
-    required this.nameController,
-    required this.nameFocus,
-    required this.category,
-    required this.onEmojiChanged,
-    required this.onNameChanged,
-    required this.onCategoryChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final categories = [
-      (
-        value: TaskCategory.personal,
-        color: const Color(0xFFF5F3FF),
-        border: const Color(0xFFDDD6FE),
-        text: const Color(0xFF6D28D9),
-      ),
-      (
-        value: TaskCategory.home,
-        color: const Color(0xFFECFDF5),
-        border: const Color(0xFFA7F3D0),
-        text: const Color(0xFF065F46),
-      ),
-      (
-        value: TaskCategory.car,
-        color: const Color(0xFFFFFBEB),
-        border: const Color(0xFFFCD34D),
-        text: const Color(0xFF92400E),
-      ),
-      (
-        value: TaskCategory.health,
-        color: const Color(0xFFFFF1F2),
-        border: const Color(0xFFFECACA),
-        text: const Color(0xFF9F1239),
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "What's the task?",
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w800,
-            fontSize: 22,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Pick an icon, name it, and choose a category.',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 14,
-            color: AppTheme.textTertiary,
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Emoji picker
-        const Text(
-          'Icon',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _emojis.map((e) {
-            final isSelected = emoji == e;
-            return GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                onEmojiChanged(e);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isSelected ? AppTheme.primaryLight : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected ? AppTheme.primary : AppTheme.borderLight,
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Center(
-                  child: Text(e, style: const TextStyle(fontSize: 22)),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 24),
-
-        // Task name
-        const Text(
-          'Task Name',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: nameController,
-          focusNode: nameFocus,
-          onChanged: onNameChanged,
-          decoration: const InputDecoration(
-            hintText: 'e.g. Haircut, Oil Change, Water Plants…',
-          ),
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 15,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Category
-        const Text(
-          'Category',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 3.0,
-          children: categories.map((cat) {
-            final isSelected = category == cat.value;
-            return GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                onCategoryChanged(cat.value);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                decoration: BoxDecoration(
-                  color: isSelected ? cat.color : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected ? cat.border : AppTheme.borderLight,
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      cat.value.emoji,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      cat.value.label,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: isSelected ? cat.text : AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
         ),
       ],
     );
   }
 }
 
-// ─── Step 2: Task type ─────────────────────────────────────────────────────────
+class _StepProgress extends StatelessWidget {
+  final int step;
+  final List<String> labels;
+  final bool isDark;
 
-class _Step2 extends StatelessWidget {
-  final TaskType taskType;
-  final void Function(TaskType) onTypeChanged;
-
-  const _Step2({super.key, required this.taskType, required this.onTypeChanged});
+  const _StepProgress({
+    required this.step,
+    required this.labels,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final types = [TaskType.fixed, TaskType.smart, TaskType.conditional];
+    final muted = isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary;
+    final topRowChildren = <Widget>[];
+    
+    for (var i = 0; i < labels.length; i++) {
+      final isActive = i + 1 == step;
+      final isDone = i + 1 < step;
+      
+      // Circle
+      topRowChildren.add(
+        SizedBox(
+          width: 28,
+          height: 28,
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDone || isActive
+                  ? AppTheme.primary
+                  : AppTheme.borderMedium,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: isDone
+                ? const Icon(Icons.check_rounded,
+                    size: 16, color: Colors.white)
+                : Text(
+                    '${i + 1}',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: isActive ? Colors.white : muted,
+                    ),
+                  ),
+          ),
+        ),
+      );
+      
+      // Connector line (if not last)
+      if (i < labels.length - 1) {
+        topRowChildren.add(
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Container(
+                height: 2,
+                color: isDone ? AppTheme.primary : AppTheme.borderMedium,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    // Label row - centered below each circle
+    final labelWidgets = List.generate(labels.length, (idx) {
+      final isActive = idx + 1 == step;
+      return Expanded(
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            Text(
+              labels[idx],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                color: isActive ? AppTheme.primary : muted,
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+
+    return Column(
+      children: [
+        Row(children: topRowChildren),
+        Row(children: labelWidgets),
+      ],
+    );
+  }
+}
+
+class _Step1 extends StatelessWidget {
+  final bool isDark;
+  final String emoji;
+  final TaskCategory category;
+  final CustomCategory? selectedCustomCategory;
+  final List<CustomCategory> customCategories;
+  final bool duplicateName;
+  final TextEditingController nameController;
+  final FocusNode nameFocus;
+  final void Function(String) onEmojiChanged;
+  final void Function(String) onNameChanged;
+  final void Function(TaskCategory) onCategoryChanged;
+  final void Function(CustomCategory) onCustomCategoryChanged;
+  final VoidCallback onAddCustomCategory;
+  final void Function(
+      ({
+        String emoji,
+        String name,
+        TaskCategory category,
+        int interval,
+      })) onTemplateTap;
+
+  const _Step1({
+    super.key,
+    required this.isDark,
+    required this.emoji,
+    required this.category,
+    required this.selectedCustomCategory,
+    required this.customCategories,
+    required this.duplicateName,
+    required this.nameController,
+    required this.nameFocus,
+    required this.onEmojiChanged,
+    required this.onNameChanged,
+    required this.onCategoryChanged,
+    required this.onCustomCategoryChanged,
+    required this.onAddCustomCategory,
+    required this.onTemplateTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final text = isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary;
+    final muted = isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary;
+    final surface = isDark ? const Color(0xFF111827) : Colors.white;
+    final border = isDark ? const Color(0xFF374151) : AppTheme.borderLight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
+          "What's the task?",
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w800,
+            fontSize: 22,
+            color: text,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Quick templates',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            color: muted,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _templates
+                .map(
+                  (t) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ActionChip(
+                      avatar: Text(t.emoji),
+                      label: Text(t.name),
+                      onPressed: () => onTemplateTap(t),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _emojis.map((e) {
+            final selected = e == emoji;
+            return GestureDetector(
+              onTap: () => onEmojiChanged(e),
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: selected ? AppTheme.primaryLight : surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? AppTheme.primary : border,
+                    width: selected ? 2 : 1,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(e, style: const TextStyle(fontSize: 22)),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: nameController,
+          focusNode: nameFocus,
+          onChanged: onNameChanged,
+          style: TextStyle(color: text, fontFamily: 'Inter', fontSize: 15),
+          decoration: InputDecoration(
+            hintText: 'Task name',
+            hintStyle: TextStyle(color: muted),
+          ),
+        ),
+        if (duplicateName)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'A task with this name already exists.',
+              style: TextStyle(
+                color: AppTheme.overdueRed,
+                fontSize: 12,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ...TaskCategory.values.map((c) {
+              final selected = selectedCustomCategory == null && c == category;
+              return ChoiceChip(
+                label: Text('${c.emoji} ${c.label}'),
+                selected: selected,
+                onSelected: (_) => onCategoryChanged(c),
+              );
+            }),
+            ...customCategories.map((c) {
+              final selected = selectedCustomCategory?.id == c.id;
+              return ChoiceChip(
+                label: Text('${c.emoji} ${c.label}'),
+                selected: selected,
+                onSelected: (_) => onCustomCategoryChanged(c),
+              );
+            }),
+            ActionChip(
+              onPressed: onAddCustomCategory,
+              avatar: const Icon(Icons.add, size: 16),
+              label: const Text('Custom'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _Step2 extends StatefulWidget {
+  final bool isDark;
+  final TaskType taskType;
+  final void Function(TaskType) onTypeChanged;
+
+  const _Step2({
+    super.key,
+    required this.isDark,
+    required this.taskType,
+    required this.onTypeChanged,
+  });
+
+  @override
+  State<_Step2> createState() => _Step2State();
+}
+
+class _Step2State extends State<_Step2> {
+  TaskType? _expandedType;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.isDark
+        ? const Color(0xFFF9FAFB)
+        : AppTheme.textPrimary;
+    final muted = widget.isDark
+        ? const Color(0xFF9CA3AF)
+        : AppTheme.textTertiary;
+    final surface = widget.isDark
+        ? const Color(0xFF111827)
+        : Colors.white;
+    final border = widget.isDark
+        ? const Color(0xFF374151)
+        : AppTheme.borderLight;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
           'How does it repeat?',
           style: TextStyle(
             fontFamily: 'Inter',
             fontWeight: FontWeight.w800,
             fontSize: 22,
-            color: AppTheme.textPrimary,
+            color: text,
           ),
         ),
-        const SizedBox(height: 4),
-        const Text(
-          'Pick a scheduling method that fits.',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 14,
-            color: AppTheme.textTertiary,
-          ),
-        ),
-        const SizedBox(height: 24),
-        ...types.map((t) {
-          final isSelected = taskType == t;
+        const SizedBox(height: 8),
+        ...TaskType.values.map((type) {
+          final selected = type == widget.taskType;
+          final expanded = _expandedType == type;
+          
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                onTypeChanged(t);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppTheme.primaryLight : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isSelected ? AppTheme.primary : AppTheme.borderLight,
-                    width: isSelected ? 2 : 1,
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Column(
+              children: [
+                ListTile(
+                  onTap: () {
+                    widget.onTypeChanged(type);
+                    setState(() {
+                      _expandedType = expanded ? null : type;
+                    });
+                  },
+                  tileColor: selected ? AppTheme.primaryLight : surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                        color: selected ? AppTheme.primary : border),
+                  ),
+                  leading: Text(type.icon,
+                      style: const TextStyle(fontSize: 24)),
+                  title: Text(
+                    type.label,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w700,
+                      color: selected ? AppTheme.primary : text,
+                    ),
+                  ),
+                  subtitle: Text(
+                    type.desc,
+                    style: TextStyle(color: muted, fontFamily: 'Inter'),
+                  ),
+                  trailing: Icon(
+                    expanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: selected ? AppTheme.primary : text,
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Text(t.icon, style: const TextStyle(fontSize: 32)),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            t.label,
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                              color: isSelected
-                                  ? const Color(0xFF3730A3)
-                                  : AppTheme.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            t.desc,
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 13,
-                              color: isSelected
-                                  ? const Color(0xFF818CF8)
-                                  : AppTheme.textTertiary,
-                            ),
-                          ),
-                        ],
+                if (expanded)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: widget.isDark
+                          ? const Color(0xFF0F172A)
+                          : AppTheme.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.primary.withOpacity(0.3),
                       ),
                     ),
-                    if (isSelected)
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.primary,
-                          shape: BoxShape.circle,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Example:',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: AppTheme.primary,
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.check_rounded,
-                          size: 14,
-                          color: Colors.white,
+                        const SizedBox(height: 6),
+                        Text(
+                          _getExample(type),
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 13,
+                            color: muted,
+                          ),
                         ),
-                      ),
-                  ],
-                ),
-              ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           );
         }),
       ],
     );
   }
+
+  String _getExample(TaskType type) {
+    switch (type) {
+      case TaskType.fixed:
+        return 'If set to 14 days, it will notify you exactly every 14 days regardless of when you mark it done.';
+      case TaskType.smart:
+        return 'Analyzes your completion history. If you usually complete it every 10-15 days, it learns this pattern and adjusts accordingly.';
+      case TaskType.conditional:
+        return 'Triggers based on conditions like "when gas tank is half full" or "when battery is low" rather than a fixed schedule.';
+    }
+  }
 }
 
-// ─── Step 3: Interval + last done ─────────────────────────────────────────────
-
 class _Step3 extends StatelessWidget {
+  final bool isDark;
   final String emoji;
   final int intervalDays;
   final int lastDoneOffset;
   final String previewDate;
+  final int reminderHour;
+  final int reminderMinute;
   final void Function(int) onIntervalChanged;
   final void Function(int) onLastDoneChanged;
 
   const _Step3({
     super.key,
+    required this.isDark,
     required this.emoji,
     required this.intervalDays,
     required this.lastDoneOffset,
     required this.previewDate,
+    required this.reminderHour,
+    required this.reminderMinute,
     required this.onIntervalChanged,
     required this.onLastDoneChanged,
   });
 
+  String _estimatedReminder(BuildContext context) {
+    final parts = previewDate.split('-');
+    final dt = DateTime(
+      int.parse(parts[0]),
+      int.parse(parts[1]),
+      int.parse(parts[2]),
+      reminderHour,
+      reminderMinute,
+    );
+    final date = formatDate(
+        '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}');
+    final time = MaterialLocalizations.of(context)
+        .formatTimeOfDay(TimeOfDay(hour: dt.hour, minute: dt.minute));
+    return '$date at $time';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final text = isDark ? const Color(0xFFF9FAFB) : AppTheme.textPrimary;
+    final muted = isDark ? const Color(0xFF9CA3AF) : AppTheme.textTertiary;
+    final surface = isDark ? const Color(0xFF111827) : Colors.white;
+    final border = isDark ? const Color(0xFF374151) : AppTheme.borderLight;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Almost done!',
           style: TextStyle(
             fontFamily: 'Inter',
             fontWeight: FontWeight.w800,
             fontSize: 22,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Set the interval and when you last did this.',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 14,
-            color: AppTheme.textTertiary,
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Interval heading
-        RichText(
-          text: TextSpan(
-            children: [
-              const TextSpan(
-                text: 'Repeat every ',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              TextSpan(
-                text: '$intervalDays days',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: AppTheme.primary,
-                ),
-              ),
-            ],
+            color: text,
           ),
         ),
         const SizedBox(height: 10),
-
-        // Presets
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: _intervalPresets.map((p) {
-            final isSelected = intervalDays == p;
-            return GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                onIntervalChanged(p);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppTheme.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${p}d',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: isSelected ? Colors.white : AppTheme.textSecondary,
-                  ),
-                ),
-              ),
+            final selected = p == intervalDays;
+            return ChoiceChip(
+              label: Text('${p}d'),
+              selected: selected,
+              onSelected: (_) => onIntervalChanged(p),
+              selectedColor: AppTheme.primary,
+              labelStyle: TextStyle(color: selected ? Colors.white : muted),
             );
           }).toList(),
         ),
-        const SizedBox(height: 12),
-
-        // Slider
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: AppTheme.primary,
-            inactiveTrackColor: AppTheme.borderMedium,
-            thumbColor: AppTheme.primary,
-            overlayColor: AppTheme.primaryLight,
-          ),
-          child: Slider(
-            min: 1,
-            max: 365,
-            value: intervalDays.toDouble(),
-            onChanged: (v) => onIntervalChanged(v.round()),
-          ),
+        Slider(
+          min: 1,
+          max: 365,
+          value: intervalDays.toDouble(),
+          onChanged: (v) => onIntervalChanged(v.round()),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('1 day',
-                  style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      color: AppTheme.textTertiary)),
-              Text('365 days',
-                  style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      color: AppTheme.textTertiary)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Last done
-        const Text(
-          'When did you last do this?',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 3.0,
-          children: _lastDoneOptions.map((opt) {
-            final isSelected = lastDoneOffset == opt.value;
-            return GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                onLastDoneChanged(opt.value);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppTheme.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Text(
-                    opt.label,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: isSelected ? Colors.white : AppTheme.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _lastDoneOptions.map((o) {
+            final selected = o.value == lastDoneOffset;
+            return ChoiceChip(
+              label: Text(o.label),
+              selected: selected,
+              onSelected: (_) => onLastDoneChanged(o.value),
+              selectedColor: AppTheme.primary,
+              labelStyle: TextStyle(color: selected ? Colors.white : muted),
             );
           }).toList(),
         ),
-        const SizedBox(height: 20),
-
-        // Next due preview
+        const SizedBox(height: 16),
         Container(
-          padding: const EdgeInsets.all(16),
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.borderLight),
+            color: surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 28)),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  const Text(
-                    'Next due date',
+                  Text(emoji, style: const TextStyle(fontSize: 24)),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Next due: ${formatDate(previewDate)}',
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 11,
-                      color: AppTheme.textTertiary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    formatDate(previewDate),
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
                       fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: AppTheme.textPrimary,
+                      color: text,
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Estimated reminder: ${_estimatedReminder(context)}',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: muted,
+                ),
               ),
             ],
           ),

@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../models/task.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
-import '../utils/export_download.dart';
+import '../utils/export_share.dart';
 import '../utils/import_data_picker.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -101,11 +102,26 @@ class SettingsScreen extends StatelessWidget {
               iconColor: mutedColor,
               labelColor: labelColor,
               trailing: Switch.adaptive(
-                value: true,
-                onChanged: (_) {},
+                value: provider.notificationsEnabled,
+                onChanged: (value) => provider.setNotificationsEnabled(value),
                 activeThumbColor: AppTheme.primary,
               ),
             ),
+            if (provider.notificationsEnabled) ...[
+              const _Divider(),
+              _SettingsTile(
+                icon: Icons.access_time_rounded,
+                label:
+                    'Reminder Time (${_formatTime(context, provider.notificationHour, provider.notificationMinute)})',
+                iconColor: mutedColor,
+                labelColor: labelColor,
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  color: mutedColor,
+                ),
+                onTap: () => _pickReminderTime(context, provider),
+              ),
+            ],
             const _Divider(),
             _SettingsTile(
               icon: Icons.dark_mode_outlined,
@@ -165,6 +181,54 @@ class SettingsScreen extends StatelessWidget {
               ),
               onTap: () => _confirmClear(context, provider),
             ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        _SectionLabel(label: 'Categories', color: mutedColor),
+        const SizedBox(height: 10),
+        _SettingsCard(
+          bgColor: cardColor,
+          borderColor: borderColor,
+          children: [
+            _SettingsTile(
+              icon: Icons.add_circle_outline_rounded,
+              label: 'Add Custom Category',
+              iconColor: mutedColor,
+              labelColor: labelColor,
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: mutedColor,
+              ),
+              onTap: () => _createCategory(context, provider),
+            ),
+            if (provider.customCategories.isNotEmpty) const _Divider(),
+            ...provider.customCategories.asMap().entries.map((entry) {
+              final i = entry.key;
+              final category = entry.value;
+              return Column(
+                children: [
+                  _SettingsTile(
+                    icon: Icons.label_outline_rounded,
+                    label: '${category.emoji} ${category.label}',
+                    iconColor: mutedColor,
+                    labelColor: labelColor,
+                    trailing: IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: AppTheme.overdueRed,
+                        size: 20,
+                      ),
+                      onPressed: () =>
+                          _deleteCategory(context, provider, category),
+                    ),
+                  ),
+                  if (i < provider.customCategories.length - 1)
+                    const _Divider(),
+                ],
+              );
+            }),
           ],
         ),
 
@@ -239,10 +303,17 @@ class SettingsScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
-              for (final task in [...provider.tasks]) {
-                await provider.deleteTask(task.id);
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
+              final clearedCount = await provider.clearAllTasks();
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                      'Cleared $clearedCount task${clearedCount == 1 ? '' : 's'}.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             },
             child: const Text(
               'Clear All',
@@ -262,15 +333,14 @@ class SettingsScreen extends StatelessWidget {
     final date =
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final filename = 'life-maintenance-export-$date.json';
-    final downloaded =
-        await downloadExportFile(filename: filename, content: json);
+    final shared = await shareExportFile(filename: filename, content: json);
 
     await Clipboard.setData(ClipboardData(text: json));
     if (!context.mounted) return;
 
     final taskCount = (jsonDecode(json)['tasks'] as List<dynamic>).length;
-    final message = downloaded
-        ? 'Exported $taskCount tasks to $filename and copied JSON to clipboard.'
+    final message = shared
+        ? 'Created shareable export file ($filename) for $taskCount tasks and copied JSON to clipboard.'
         : 'Copied export JSON for $taskCount tasks to clipboard.';
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -279,6 +349,24 @@ class SettingsScreen extends StatelessWidget {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _pickReminderTime(
+      BuildContext context, AppProvider provider) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: provider.notificationHour,
+        minute: provider.notificationMinute,
+      ),
+    );
+    if (picked == null) return;
+    await provider.setNotificationTime(picked);
+  }
+
+  String _formatTime(BuildContext context, int hour, int minute) {
+    final tod = TimeOfDay(hour: hour, minute: minute);
+    return MaterialLocalizations.of(context).formatTimeOfDay(tod);
   }
 
   Future<void> _importData(BuildContext context, AppProvider provider) async {
@@ -305,6 +393,108 @@ class SettingsScreen extends StatelessWidget {
         ),
       );
     }
+  }
+
+  Future<void> _createCategory(
+      BuildContext context, AppProvider provider) async {
+    final nameController = TextEditingController();
+    String selectedEmoji = '🏷️';
+    final emojis = [
+      '🏷️',
+      '🧠',
+      '💼',
+      '🧾',
+      '🎓',
+      '🛒',
+      '🍽️',
+      '🎯',
+      '📦',
+      '🎨',
+      '🧳',
+      '🧑‍💻'
+    ];
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Custom Category'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(hintText: 'Category name'),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: emojis.map((emoji) {
+                  final selected = selectedEmoji == emoji;
+                  return GestureDetector(
+                    onTap: () => setDialogState(() => selectedEmoji = emoji),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: selected
+                            ? AppTheme.primaryLight
+                            : Colors.transparent,
+                        border: Border.all(
+                          color: selected
+                              ? AppTheme.primary
+                              : AppTheme.borderMedium,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(emoji),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final label = nameController.text.trim();
+    nameController.dispose();
+    if (result != true || label.isEmpty) return;
+    await provider.addCustomCategory(label: label, emoji: selectedEmoji);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Custom category added.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _deleteCategory(
+    BuildContext context,
+    AppProvider provider,
+    CustomCategory category,
+  ) async {
+    await provider.deleteCustomCategory(category.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Deleted category "${category.label}".'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<String?> _showImportDialog(BuildContext context) async {

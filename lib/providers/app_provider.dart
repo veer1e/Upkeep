@@ -2,21 +2,35 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task.dart';
+import '../services/app_notification_service.dart';
 
 class AppProvider extends ChangeNotifier {
   static const String _storageKey = 'life-maintenance-tasks';
   static const String _themeModeKey = 'life-maintenance-theme-mode';
+  static const String _notificationsEnabledKey =
+      'life-maintenance-notifications-enabled';
+  static const String _notificationMinutesKey =
+      'life-maintenance-notification-minutes';
+  static const String _customCategoriesKey =
+      'life-maintenance-custom-categories';
 
   List<Task> _tasks = [];
   Task? _completionTarget;
   bool _isLoaded = false;
   ThemeMode _themeMode = ThemeMode.light;
+  bool _notificationsEnabled = false;
+  int _notificationMinutes = 9 * 60;
+  List<CustomCategory> _customCategories = [];
 
   List<Task> get tasks => _tasks;
   Task? get completionTarget => _completionTarget;
   bool get isLoaded => _isLoaded;
   ThemeMode get themeMode => _themeMode;
   bool get isDarkMode => _themeMode == ThemeMode.dark;
+  bool get notificationsEnabled => _notificationsEnabled;
+  int get notificationHour => _notificationMinutes ~/ 60;
+  int get notificationMinute => _notificationMinutes % 60;
+  List<CustomCategory> get customCategories => _customCategories;
 
   // Derived getters
   List<Task> get overdueTasks => _tasks
@@ -39,7 +53,10 @@ class AppProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final stored = prefs.getString(_storageKey);
+      final storedCustomCategories = prefs.getString(_customCategoriesKey);
       final storedThemeMode = prefs.getString(_themeModeKey);
+      _notificationsEnabled = prefs.getBool(_notificationsEnabledKey) ?? false;
+      _notificationMinutes = prefs.getInt(_notificationMinutesKey) ?? 9 * 60;
       if (storedThemeMode == 'dark') {
         _themeMode = ThemeMode.dark;
       } else {
@@ -53,11 +70,22 @@ class AppProvider extends ChangeNotifier {
       } else {
         _tasks = List.from(initialTasks);
       }
+
+      if (storedCustomCategories != null) {
+        final decoded = jsonDecode(storedCustomCategories) as List<dynamic>;
+        _customCategories = decoded
+            .map((e) => CustomCategory.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      } else {
+        _customCategories = [];
+      }
     } catch (_) {
       _tasks = List.from(initialTasks);
+      _customCategories = [];
     }
     _isLoaded = true;
     notifyListeners();
+    await _syncScheduledNotifications();
   }
 
   Future<void> _saveTasks() async {
@@ -102,6 +130,7 @@ class AppProvider extends ChangeNotifier {
 
     notifyListeners();
     await _saveTasks();
+    await _syncScheduledNotifications();
     return imported.length;
   }
 
@@ -112,6 +141,51 @@ class AppProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_themeModeKey, enabled ? 'dark' : 'light');
     } catch (_) {}
+  }
+
+  Future<void> setNotificationsEnabled(bool enabled) async {
+    _notificationsEnabled = enabled;
+    notifyListeners();
+    await _saveNotificationPrefs();
+    if (enabled) {
+      await AppNotificationService.instance.requestPermissions();
+    }
+    await _syncScheduledNotifications();
+  }
+
+  Future<void> setNotificationTime(TimeOfDay time) async {
+    _notificationMinutes = time.hour * 60 + time.minute;
+    notifyListeners();
+    await _saveNotificationPrefs();
+    if (_notificationsEnabled) {
+      await _syncScheduledNotifications();
+    }
+  }
+
+  Future<void> addCustomCategory({
+    required String label,
+    required String emoji,
+  }) async {
+    final normalized = label.trim();
+    if (normalized.isEmpty) return;
+    final exists = _customCategories
+        .any((c) => c.label.toLowerCase() == normalized.toLowerCase());
+    if (exists) return;
+
+    final category = CustomCategory(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      label: normalized,
+      emoji: emoji.trim().isEmpty ? '🏷️' : emoji.trim(),
+    );
+    _customCategories = [..._customCategories, category];
+    notifyListeners();
+    await _saveCustomCategories();
+  }
+
+  Future<void> deleteCustomCategory(String id) async {
+    _customCategories = _customCategories.where((c) => c.id != id).toList();
+    notifyListeners();
+    await _saveCustomCategories();
   }
 
   void setCompletionTarget(Task? task) {
@@ -137,23 +211,65 @@ class AppProvider extends ChangeNotifier {
     _completionTarget = null;
     notifyListeners();
     await _saveTasks();
+    await _syncScheduledNotifications();
   }
 
   Future<void> addTask(Task task) async {
     _tasks = [..._tasks, task];
     notifyListeners();
     await _saveTasks();
+    await _syncScheduledNotifications();
   }
 
   Future<void> deleteTask(String id) async {
     _tasks = _tasks.where((t) => t.id != id).toList();
     notifyListeners();
     await _saveTasks();
+    await _syncScheduledNotifications();
   }
 
   Future<void> updateTask(String id, Task updatedTask) async {
     _tasks = _tasks.map((t) => t.id == id ? updatedTask : t).toList();
     notifyListeners();
     await _saveTasks();
+    await _syncScheduledNotifications();
+  }
+
+  Future<int> clearAllTasks() async {
+    final clearedCount = _tasks.length;
+    _tasks = [];
+    notifyListeners();
+    await _saveTasks();
+    await _syncScheduledNotifications();
+    return clearedCount;
+  }
+
+  Future<void> _saveNotificationPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_notificationsEnabledKey, _notificationsEnabled);
+      await prefs.setInt(_notificationMinutesKey, _notificationMinutes);
+    } catch (_) {}
+  }
+
+  Future<void> _syncScheduledNotifications() async {
+    try {
+      await AppNotificationService.instance.scheduleTaskNotifications(
+        tasks: _tasks,
+        enabled: _notificationsEnabled,
+        hour: notificationHour,
+        minute: notificationMinute,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _saveCustomCategories() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = jsonEncode(
+        _customCategories.map((c) => c.toJson()).toList(),
+      );
+      await prefs.setString(_customCategoriesKey, encoded);
+    } catch (_) {}
   }
 }
